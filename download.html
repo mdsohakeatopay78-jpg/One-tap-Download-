@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="hi" data-theme="blue">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>one tap download </title>
+    <style>
+        /* --- 1. CORE THEMES & VARIABLES --- */
+        :root { --sidebar-width: 320px; }
+        :root[data-theme="red"] { --primary: #e74c3c; --primary-light: #fadbd8; --gradient: linear-gradient(135deg, #e74c3c, #c0392b); }
+        :root[data-theme="green"] { --primary: #27ae60; --primary-light: #d5f4e6; --gradient: linear-gradient(135deg, #27ae60, #229954); }
+        :root[data-theme="blue"] { --primary: #3498db; --primary-light: #d6eaf8; --gradient: linear-gradient(135deg, #3498db, #2980b9); }
+        :root[data-theme="pink"] { --primary: #e91e63; --primary-light: #fce4ec; --gradient: linear-gradient(135deg, #e91e63, #c2185b); }
+        :root[data-theme="yellow"] { --primary: #f39c12; --primary-light: #fef5e7; --gradient: linear-gradient(135deg, #f39c12, #e67e22); }
+        :root[data-theme="multi"] { --primary: #9b59b6; --primary-light: #ebdef0; --gradient: linear-gradient(135deg, #667eea, #764ba2, #f093fb); }
+        :root[data-theme="black"] { --primary: #2c3e50; --primary-light: #d5d8dc; --gradient: linear-gradient(135deg, #2c3e50, #34495e); }
+        :root[data-theme="orange"] { --primary: #ff6b35; --primary-light: #ffe5db; --gradient: linear-gradient(135deg, #ff6b35, #e85d2c); }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--gradient); min-height: 100vh; color: #333; overflow-x: hidden; padding-bottom: 20px; }
+
+        /* --- 2. ADVERTISEMENT STYLING (RESPONSIVE) --- */
+        .ad-container {
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 15px 0;
+            padding: 10px 0;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* Wrapper to handle the 728px iframe scaling */
+        .ad-wrapper {
+            width: 728px;
+            height: 90px;
+            transform-origin: center center;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* Mobile Scale Logic: 728px ad ko mobile screen par fit karne ke liye */
+        @media (max-width: 768px) {
+            .ad-wrapper {
+                transform: scale(0.45); /* Scale down to ~45% */
+                margin: -25px -180px; /* Negative margin to remove whitespace caused by scaling */
+            }
+        }
+        @media (min-width: 769px) {
+            .ad-wrapper { transform: scale(1); }
+        }
+
+        /* Modal/Popup Ad Styles */
+        .ad-modal {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.95); z-index: 2000;
+            justify-content: center; align-items: center; flex-direction: column;
+        }
+        .ad-modal.active { display: flex; }
+        .ad-modal-content {
+            background: white; padding: 20px; border-radius: 12px;
+            text-align: center; width: 95%; max-width: 800px; position: relative;
+        }
+        .skip-btn {
+            background: var(--primary); color: white; border: none; padding: 12px 30px;
+            border-radius: 25px; font-size: 16px; font-weight: bold; cursor: pointer;
+            margin-top: 15px; opacity: 0.5; pointer-events: none; transition: 0.3s;
+        }
+        .skip-btn.ready { opacity: 1; pointer-events: all; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+        .timer-text { font-size: 18px; margin-bottom: 10px; font-weight: 600; }
+
+        /* --- 3. SIDEBAR / MENU STYLING --- */
+        .menu-toggle {
+            position: fixed; top: 20px; right: 20px; width: 45px; height: 45px;
+            background: white; border-radius: 8px; cursor: pointer; z-index: 1001;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            gap: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        .menu-toggle span { width: 26px; height: 3px; background: var(--primary); border-radius: 2px; transition: 0.3s; }
+        .menu-toggle.active span:nth-child(1) { transform: rotate(45deg) translate(8px, 8px); }
+        .menu-toggle.active span:nth-child(2) { opacity: 0; }
+        .menu-toggle.active span:nth-child(3) { transform: rotate(-45deg) translate(7px, -7px); }
+
+        .sidebar {
+            position: fixed; top: 0; right: -100%; 
+            width: 100%; /* Mobile par full width taaki ad fit ho */
+            max-width: 400px; /* Desktop par limit */
+            height: 100vh; background: white;
+            box-shadow: -5px 0 20px rgba(0,0,0,0.2); z-index: 1000;
+            transition: right 0.3s; overflow-y: auto; padding: 80px 20px 20px;
+        }
+        .sidebar.active { right: 0; }
+        .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100vh; background: rgba(0,0,0,0.5); z-index: 999; display: none; }
+        .overlay.active { display: block; }
+        
+        .menu-section { margin-bottom: 30px; }
+        .menu-section h3 { color: var(--primary); font-size: 16px; border-bottom: 2px solid var(--primary-light); padding-bottom: 8px; margin-bottom: 15px; }
+        
+        /* Theme Grid */
+        .theme-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+        .theme-btn { width: 100%; height: 45px; border: 2px solid #ddd; border-radius: 8px; color: white; cursor: pointer; font-weight: bold; font-size: 12px; }
+        .theme-btn.active { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-light); }
+        /* Theme Colors in CSS Buttons */
+        .theme-btn.red { background: linear-gradient(135deg, #e74c3c, #c0392b); }
+        .theme-btn.green { background: linear-gradient(135deg, #27ae60, #229954); }
+        .theme-btn.blue { background: linear-gradient(135deg, #3498db, #2980b9); }
+        .theme-btn.pink { background: linear-gradient(135deg, #e91e63, #c2185b); }
+        .theme-btn.yellow { background: linear-gradient(135deg, #f39c12, #e67e22); }
+        .theme-btn.multi { background: linear-gradient(135deg, #667eea, #f093fb); }
+        .theme-btn.black { background: linear-gradient(135deg, #2c3e50, #34495e); }
+        .theme-btn.orange { background: linear-gradient(135deg, #ff6b35, #e85d2c); }
+
+        /* --- 4. MAIN APP CONTAINER --- */
+        .container { max-width: 600px; margin: 0 auto; padding: 80px 20px 20px; }
+        .app-card { background: white; border-radius: 20px; padding: 30px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
+
+        h1 { text-align: center; color: var(--primary); font-size: 28px; margin-bottom: 10px; }
+        .subtitle { text-align: center; color: #666; font-size: 14px; margin-bottom: 20px; }
+        
+        .input-group { position: relative; margin-bottom: 20px; }
+        input[type="text"] { width: 100%; padding: 15px 50px 15px 15px; border: 2px solid #e0e0e0; border-radius: 12px; font-size: 15px; }
+        input[type="text"]:focus { outline: none; border-color: var(--primary); }
+        .clear-btn { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); width: 30px; height: 30px; background: #e74c3c; color: white; border: none; border-radius: 50%; display: none; align-items: center; justify-content: center; cursor: pointer; }
+        .clear-btn.show { display: flex; }
+
+        .btn-3d { width: 100%; padding: 16px; background: #e74c3c; color: white; border: none; border-radius: 12px; font-size: 18px; font-weight: bold; cursor: pointer; box-shadow: 0 6px 0 #c0392b; position: relative; top: 0; transition: 0.1s; }
+        .btn-3d:active { top: 4px; box-shadow: 0 2px 0 #c0392b; }
+        
+        .loading { display: none; text-align: center; margin: 20px 0; }
+        .spinner { border: 4px solid #f3f3f3; border-top: 4px solid var(--primary); border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 0 auto; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        .result { display: none; margin-top: 25px; }
+        .info-card { background: var(--primary-light); padding: 15px; border-radius: 12px; margin-bottom: 15px; }
+        .thumbnail { width: 100%; border-radius: 10px; margin-bottom: 10px; }
+        .download-btn { display: block; width: 100%; padding: 12px; background: #27ae60; color: white; text-align: center; text-decoration: none; border-radius: 8px; font-weight: bold; margin-top: 10px; box-shadow: 0 4px 0 #229954; }
+        .download-btn:active { transform: translateY(2px); box-shadow: 0 2px 0 #229954; }
+        .error { background: #e74c3c; color: white; padding: 15px; border-radius: 10px; margin-top: 20px; display: none; }
+    </style>
+</head>
+<body>
+
+    <!-- 1. NAVIGATION & SIDEBAR -->
+    <div class="menu-toggle" id="menuToggle">
+        <span></span><span></span><span></span>
+    </div>
+    <div class="overlay" id="overlay"></div>
+
+    <div class="sidebar" id="sidebar">
+        <!-- Sidebar Ad -->
+        <div class="menu-section" style="text-align: center;">
+            <h3>📢 Sponsor</h3>
+            <div class="ad-container">
+                <div class="ad-wrapper">
+                    <!-- AD SCRIPT START -->
+                    <script type="text/javascript">
+                        atOptions = { 'key' : '5c670846fbe2962df367a1280ed3b6d4', 'format' : 'iframe', 'height' : 90, 'width' : 728, 'params' : {} };
+                    </script>
+                    <script type="text/javascript" src="https://www.highperformanceformat.com/5c670846fbe2962df367a1280ed3b6d4/invoke.js"></script>
+                    <!-- AD SCRIPT END -->
+                </div>
+            </div>
+        </div>
+
+        <div class="menu-section">
+            <h3>🎨 Change Theme</h3>
+            <div class="theme-grid">
+                <button class="theme-btn red" data-theme="red">Red</button>
+                <button class="theme-btn green" data-theme="green">Green</button>
+                <button class="theme-btn blue active" data-theme="blue">Blue</button>
+                <button class="theme-btn pink" data-theme="pink">Pink</button>
+                <button class="theme-btn yellow" data-theme="yellow">Yellow</button>
+                <button class="theme-btn multi" data-theme="multi">Multi</button>
+                <button class="theme-btn black" data-theme="black">Black</button>
+                <button class="theme-btn orange" data-theme="orange">Orange</button>
+            </div>
+        </div>
+        
+        <div class="menu-section">
+            <h3>ℹ️ Info</h3>
+            <p style="font-size:14px; color:#666;">Version: 1.0.0<br>Secure & Fast Downloader</p>
+        </div>
+    </div>
+
+    <!-- 2. POPUP AD MODAL -->
+    <div id="adModal" class="ad-modal">
+        <div class="ad-modal-content">
+            <h2 class="timer-text" id="adTimerText">Processing...</h2>
+            
+            <!-- Modal Ad -->
+            <div class="ad-container">
+                <div class="ad-wrapper">
+                    <script type="text/javascript">
+                        atOptions = { 'key' : '5c670846fbe2962df367a1280ed3b6d4', 'format' : 'iframe', 'height' : 90, 'width' : 728, 'params' : {} };
+                    </script>
+                    <script type="text/javascript" src="https://www.highperformanceformat.com/5c670846fbe2962df367a1280ed3b6d4/invoke.js"></script>
+                </div>
+            </div>
+
+            <button id="skipAdBtn" class="skip-btn">Skip Ad & Download 🚀</button>
+        </div>
+    </div>
+
+    <!-- 3. MAIN APP CONTENT -->
+    <div class="container">
+        
+        <!-- Top Ad Banner -->
+        <div class="ad-container">
+            <div class="ad-wrapper">
+                <script type="text/javascript">
+                    atOptions = { 'key' : '5c670846fbe2962df367a1280ed3b6d4', 'format' : 'iframe', 'height' : 90, 'width' : 728, 'params' : {} };
+                </script>
+                <script type="text/javascript" src="https://www.highperformanceformat.com/5c670846fbe2962df367a1280ed3b6d4/invoke.js"></script>
+            </div>
+        </div>
+
+        <div class="app-card">
+            <h1>  One tap 🎬 Video and audio  Downloader</h1>
+            <p class="subtitle">Instagram, Facebook , YouTube & More</p>
+            
+            <div class="input-group">
+                <input type="text" id="urlInput" placeholder="Paste URL here..." />
+                <button class="clear-btn" id="clearBtn">✕</button>
+            </div>
+
+            <button class="btn-3d" id="downloadBtn">Download Now 🚀</button>
+
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p style="margin-top:10px; font-weight:600; color:var(--primary);">Fetching video...</p>
+            </div>
+            
+            <div class="error" id="error"></div>
+
+            <div class="result" id="result">
+                <div class="info-card">
+                    <img id="thumbnail" class="thumbnail" alt="Thumb" style="display:none;">
+                    <h3 id="title">Title</h3>
+                    <p>Source: <span id="source"></span></p>
+                </div>
+                <h3 style="color:var(--primary); margin-bottom:10px;">📥 Links:</h3>
+                <div id="mediaList"></div>
+            </div>
+        </div>
+
+        <!-- Bottom Ad Banner -->
+        <div class="ad-container">
+            <div class="ad-wrapper">
+                <script type="text/javascript">
+                    atOptions = { 'key' : '5c670846fbe2962df367a1280ed3b6d4', 'format' : 'iframe', 'height' : 90, 'width' : 728, 'params' : {} };
+                </script>
+                <script type="text/javascript" src="https://www.highperformanceformat.com/5c670846fbe2962df367a1280ed3b6d4/invoke.js"></script>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- 4. JAVASCRIPT LOGIC -->
+    <script>
+        // --- API Config ---
+        const API_KEY = 'ca01ecc2d8msh987584decc17313p100323jsn43570e80f477';
+        const API_HOST = 'social-download-all-in-one.p.rapidapi.com';
+
+        // --- Elements ---
+        const menuToggle = document.getElementById('menuToggle');
+        const sidebar = document.getElementById('sidebar');
+        const overlay = document.getElementById('overlay');
+        const themeButtons = document.querySelectorAll('.theme-btn');
+        const urlInput = document.getElementById('urlInput');
+        const clearBtn = document.getElementById('clearBtn');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const loading = document.getElementById('loading');
+        const result = document.getElementById('result');
+        const error = document.getElementById('error');
+        
+        // Ad Elements
+        const adModal = document.getElementById('adModal');
+        const skipAdBtn = document.getElementById('skipAdBtn');
+        const adTimerText = document.getElementById('adTimerText');
+        let adInterval;
+
+        // --- Toggle Menu ---
+        function toggleMenu() {
+            const isActive = menuToggle.classList.contains('active');
+            menuToggle.classList.toggle('active');
+            sidebar.classList.toggle('active');
+            overlay.classList.toggle('active');
+        }
+        menuToggle.addEventListener('click', toggleMenu);
+        overlay.addEventListener('click', toggleMenu);
+
+        // --- Theme Logic ---
+        const savedTheme = localStorage.getItem('theme') || 'blue';
+        document.documentElement.setAttribute('data-theme', savedTheme);
+        document.querySelector(`[data-theme="${savedTheme}"]`)?.classList.add('active');
+
+        themeButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const theme = btn.getAttribute('data-theme');
+                document.documentElement.setAttribute('data-theme', theme);
+                localStorage.setItem('theme', theme);
+                themeButtons.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+            });
+        });
+
+        // --- Input Logic ---
+        urlInput.addEventListener('input', () => {
+            clearBtn.classList.toggle('show', urlInput.value.trim().length > 0);
+        });
+        clearBtn.addEventListener('click', () => {
+            urlInput.value = '';
+            clearBtn.classList.remove('show');
+            result.style.display = 'none';
+            error.style.display = 'none';
+        });
+
+        // --- Download & Ad Logic ---
+        downloadBtn.addEventListener('click', initiateDownload);
+        
+        function initiateDownload() {
+            const url = urlInput.value.trim();
+            if (!url) return showError('Please enter a valid URL');
+            
+            // Show Ad Modal
+            adModal.classList.add('active');
+            let timeLeft = 3;
+            
+            skipAdBtn.classList.remove('ready');
+            skipAdBtn.textContent = `Wait ${timeLeft}s`;
+            adTimerText.textContent = `Generating Link: ${timeLeft}s`;
+
+            if(adInterval) clearInterval(adInterval);
+            
+            adInterval = setInterval(() => {
+                timeLeft--;
+                if (timeLeft > 0) {
+                    skipAdBtn.textContent = `Wait ${timeLeft}s`;
+                    adTimerText.textContent = `Generating Link: ${timeLeft}s`;
+                } else {
+                    clearInterval(adInterval);
+                    skipAdBtn.textContent = "Skip Ad & Download 🚀";
+                    adTimerText.textContent = "Download Ready!";
+                    skipAdBtn.classList.add('ready');
+                }
+            }, 1000);
+        }
+
+        skipAdBtn.addEventListener('click', () => {
+            if (!skipAdBtn.classList.contains('ready')) return;
+            adModal.classList.remove('active');
+            fetchMedia();
+        });
+
+        // --- API Fetch ---
+        async function fetchMedia() {
+            const url = urlInput.value.trim();
+            loading.style.display = 'block';
+            result.style.display = 'none';
+            error.style.display = 'none';
+            downloadBtn.disabled = true;
+
+            try {
+                const response = await fetch(`https://${API_HOST}/v1/social/autolink`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'x-rapidapi-key': API_KEY, 'x-rapidapi-host': API_HOST },
+                    body: JSON.stringify({ url: url })
+                });
+
+                if (!response.ok) throw new Error('Failed to fetch media');
+                const data = await response.json();
+
+                if (data.medias && data.medias.length > 0) {
+                    displayResult(data);
+                } else {
+                    showError('No media found for this link.');
+                }
+            } catch (err) {
+                showError('Error: ' + err.message);
+            } finally {
+                loading.style.display = 'none';
+                downloadBtn.disabled = false;
+            }
+        }
+
+        function displayResult(data) {
+            document.getElementById('title').textContent = data.title || 'Video Result';
+            document.getElementById('source').textContent = data.source || 'Social';
+            
+            const thumb = document.getElementById('thumbnail');
+            if (data.thumbnail) { thumb.src = data.thumbnail; thumb.style.display = 'block'; }
+            
+            const mediaList = document.getElementById('mediaList');
+            mediaList.innerHTML = '';
+
+            data.medias.forEach(media => {
+                const div = document.createElement('div');
+                div.style.cssText = "background:white; border:1px solid #ddd; padding:10px; margin-bottom:10px; border-radius:8px;";
+                div.innerHTML = `
+                    <div style="font-size:12px; font-weight:bold; color:var(--primary);">${media.quality || 'HD'} (${media.extension})</div>
+                    <a href="${media.url}" class="download-btn" target="_blank">📥 Download</a>
+                `;
+                mediaList.appendChild(div);
+            });
+            result.style.display = 'block';
+        }
+
+        function showError(msg) {
+            error.textContent = msg;
+            error.style.display = 'block';
+        }
+    </script>
+</body>
+</html>
